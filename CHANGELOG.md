@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0]
 
 ### Added
 
@@ -15,6 +15,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Leaving it unset changes nothing, so upgrading the operator does not restart
   existing clusters. The `valkey-cluster` chart exposes it as
   `imagePullSecrets`.
+
+### Changed
+
+- Dependency bumps: Kubernetes libraries to 0.35.9, ginkgo to 2.33.0, and
+  gomega to 1.43.1.
 
 ## [0.8.2]
 
@@ -276,6 +281,7 @@ First public release of the operator. Highlights of the initial feature set:
 - CEL XValidation for immutable and conditional fields; config-hash-driven
   rolling restarts; version-gated Valkey 9.x resilience directives.
 
+[0.9.0]: https://github.com/melancholictheory/wellcake/releases/tag/v0.9.0
 [0.8.2]: https://github.com/melancholictheory/wellcake/releases/tag/v0.8.2
 [0.8.1]: https://github.com/melancholictheory/wellcake/releases/tag/v0.8.1
 [0.8.0]: https://github.com/melancholictheory/wellcake/releases/tag/v0.8.0
