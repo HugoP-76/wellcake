@@ -58,6 +58,9 @@ spec:
     {{- if .Values.metrics.image }}
     image: {{ .Values.metrics.image | quote }}
     {{- end }}
+    {{- if .Values.metrics.imagePullPolicy }}
+    imagePullPolicy: {{ .Values.metrics.imagePullPolicy }}
+    {{- end }}
     serviceMonitor: {{ .Values.metrics.serviceMonitor }}
   {{- with .Values.config }}
   config:

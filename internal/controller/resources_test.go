@@ -1761,6 +1761,39 @@ func TestImagePullSecretsPropagateToEveryPod(t *testing.T) {
 	}
 }
 
+// spec.metrics.imagePullPolicy applies to the exporter sidecar only; the Valkey
+// containers keep spec.imagePullPolicy.
+func TestMetricsImagePullPolicy(t *testing.T) {
+	policies := func(vc *cachev1beta1.ValkeyCluster) map[string]corev1.PullPolicy {
+		spec := buildStatefulSet(vc, "h", false).Spec.Template.Spec
+		got := map[string]corev1.PullPolicy{}
+		for _, c := range append(spec.InitContainers, spec.Containers...) {
+			got[c.Name] = c.ImagePullPolicy
+		}
+		return got
+	}
+
+	set := minimalCR()
+	set.Spec.Metrics = &cachev1beta1.MetricsSpec{Enabled: true, ImagePullPolicy: corev1.PullAlways}
+	got := policies(set)
+	if got[metricsPortName] != corev1.PullAlways {
+		t.Errorf("exporter imagePullPolicy = %q, want %q", got[metricsPortName], corev1.PullAlways)
+	}
+	for _, name := range []string{"config-init", appValkey} {
+		if got[name] != corev1.PullIfNotPresent {
+			t.Errorf("%s imagePullPolicy = %q, want spec.imagePullPolicy %q", name, got[name], corev1.PullIfNotPresent)
+		}
+	}
+
+	// Unset → no pull policy on the exporter, so the StatefulSet applied-hash of
+	// existing clusters is unchanged and upgrading the operator triggers no rollout.
+	unset := minimalCR()
+	unset.Spec.Metrics = &cachev1beta1.MetricsSpec{Enabled: true}
+	if p, ok := policies(unset)[metricsPortName]; !ok || p != "" {
+		t.Errorf("exporter imagePullPolicy must stay empty when unset, got %q (present=%v)", p, ok)
+	}
+}
+
 func TestClusterJobsHaveRestrictedSecurityContext(t *testing.T) {
 	vc := minimalCR()
 	vc.Spec.Topology = cachev1beta1.TopologyCluster

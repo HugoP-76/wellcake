@@ -78,6 +78,7 @@ tls:
 metrics:
   enabled: true
   image: ""
+  imagePullPolicy: ""
   serviceMonitor: false
 
 # Free-form Valkey config directives appended to valkey.conf.

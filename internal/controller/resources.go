@@ -1386,10 +1386,11 @@ func buildExporter(vc *cachev1beta1.ValkeyCluster) corev1.Container {
 		})
 	}
 	return corev1.Container{
-		Name:  metricsPortName,
-		Image: image,
-		Env:   env,
-		Ports: []corev1.ContainerPort{{Name: metricsPortName, ContainerPort: exporterPort}},
+		Name:            metricsPortName,
+		Image:           image,
+		ImagePullPolicy: vc.Spec.Metrics.ImagePullPolicy,
+		Env:             env,
+		Ports:           []corev1.ContainerPort{{Name: metricsPortName, ContainerPort: exporterPort}},
 	}
 }
 
