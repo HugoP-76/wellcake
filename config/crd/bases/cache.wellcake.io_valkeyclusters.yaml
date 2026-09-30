@@ -1334,6 +1334,16 @@ spec:
                     default: oliver006/redis_exporter:v1.62.0
                     description: Image of the exporter.
                     type: string
+                  imagePullPolicy:
+                    description: |-
+                      ImagePullPolicy for the exporter sidecar. When unset the container
+                      carries no pull policy and Kubernetes applies its default (Always for
+                      :latest or untagged images, IfNotPresent otherwise).
+                    enum:
+                    - Always
+                    - Never
+                    - IfNotPresent
+                    type: string
                   serviceMonitor:
                     description: ServiceMonitor creates a Prometheus Operator ServiceMonitor.
                     type: boolean
@@ -3917,6 +3927,16 @@ spec:
                   image:
                     default: oliver006/redis_exporter:v1.62.0
                     description: Image of the exporter.
+                    type: string
+                  imagePullPolicy:
+                    description: |-
+                      ImagePullPolicy for the exporter sidecar. When unset the container
+                      carries no pull policy and Kubernetes applies its default (Always for
+                      :latest or untagged images, IfNotPresent otherwise).
+                    enum:
+                    - Always
+                    - Never
+                    - IfNotPresent
                     type: string
                   serviceMonitor:
                     description: ServiceMonitor creates a Prometheus Operator ServiceMonitor.

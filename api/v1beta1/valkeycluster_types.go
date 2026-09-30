@@ -536,6 +536,13 @@ type MetricsSpec struct {
 	// +optional
 	Image string `json:"image,omitempty"`
 
+	// ImagePullPolicy for the exporter sidecar. When unset the container
+	// carries no pull policy and Kubernetes applies its default (Always for
+	// :latest or untagged images, IfNotPresent otherwise).
+	// +kubebuilder:validation:Enum=Always;Never;IfNotPresent
+	// +optional
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
 	// ServiceMonitor creates a Prometheus Operator ServiceMonitor.
 	// +optional
 	ServiceMonitor bool `json:"serviceMonitor,omitempty"`

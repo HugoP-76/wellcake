@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `spec.metrics.imagePullPolicy` on `ValkeyCluster` (v1beta1 and v1alpha1) to
+  set the pull policy of the metrics exporter sidecar independently of the
+  Valkey containers. When unset the exporter carries no pull policy, as before,
+  so upgrading the operator does not restart existing clusters. The
+  `valkey-cluster` chart exposes it as `metrics.imagePullPolicy`.
+
 ## [0.9.0]
 
 ### Added

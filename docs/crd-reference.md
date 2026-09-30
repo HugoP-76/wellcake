@@ -46,6 +46,7 @@ Short names: `vk`, `vkc`. Printer columns: `Topology`, `Replicas`,
 | `metrics`                     | `MetricsSpec`              | disabled       | |
 | `metrics.enabled`             | bool                       | `false`        | Adds a `redis_exporter` sidecar on port 9121. |
 | `metrics.image`               | string                     | `oliver006/redis_exporter:v1.62.0` | |
+| `metrics.imagePullPolicy`     | `Always\|Never\|IfNotPresent` |  —          | Pull policy of the exporter sidecar. Unset → Kubernetes default. Changing it rolls the pods. |
 | `metrics.serviceMonitor`      | bool                       | `false`        | Creates a ServiceMonitor (Prometheus Operator) via unstructured; if the CRDs are not installed it is simply skipped. |
 | `config`                      | map[string]string          | —              | Arbitrary Valkey directives, appended to `valkey.conf`. |
 | `nodeSelector` / `tolerations`| standard                   | —              | |
