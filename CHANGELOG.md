@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0]
 
 ### Added
 
@@ -16,6 +16,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The `valkey-cluster` chart exposes `podSecurityContext` and
   `containerSecurityContext`, which the CRD already supported. They are only
   rendered when set, so existing releases render unchanged.
+
+### Changed
+
+- Dependency bump: gomega to 1.44.0.
 
 ## [0.9.0]
 
@@ -294,6 +298,7 @@ First public release of the operator. Highlights of the initial feature set:
 - CEL XValidation for immutable and conditional fields; config-hash-driven
   rolling restarts; version-gated Valkey 9.x resilience directives.
 
+[0.10.0]: https://github.com/melancholictheory/wellcake/releases/tag/v0.10.0
 [0.9.0]: https://github.com/melancholictheory/wellcake/releases/tag/v0.9.0
 [0.8.2]: https://github.com/melancholictheory/wellcake/releases/tag/v0.8.2
 [0.8.1]: https://github.com/melancholictheory/wellcake/releases/tag/v0.8.1
