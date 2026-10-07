@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0]
 
 ### Fixed
 
@@ -52,7 +52,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dropped on serialization, so the API server re-applied the default: auth got
   enabled, a PDB got created, automatic resharding got turned on, and backup
   retention went from "keep every snapshot" to 7, deleting older snapshots. The
-  fields now keep an explicit value through the Go types (see Changed).
+  fields now keep an explicit value through the Go types (see Changed). An object
+  that an older operator already reset keeps the default until you apply the
+  intended value again. Check `spec.backup.retention` in particular: with 7
+  stored, the backup job keeps deleting older snapshots.
 
 ### Changed
 
@@ -357,6 +360,7 @@ First public release of the operator. Highlights of the initial feature set:
 - CEL XValidation for immutable and conditional fields; config-hash-driven
   rolling restarts; version-gated Valkey 9.x resilience directives.
 
+[0.11.0]: https://github.com/melancholictheory/wellcake/releases/tag/v0.11.0
 [0.10.0]: https://github.com/melancholictheory/wellcake/releases/tag/v0.10.0
 [0.9.0]: https://github.com/melancholictheory/wellcake/releases/tag/v0.9.0
 [0.8.2]: https://github.com/melancholictheory/wellcake/releases/tag/v0.8.2
