@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The `valkey-cluster` chart documented `backup.s3.encryption` as
+  `"" | AES256 | aws:kms`, but the CRD only accepts `AES256` or `KMS`, so a value
+  copied from the chart was rejected at install. It also described
+  `backup.s3.kmsKeyId` as required, while it is optional: left empty, uploads
+  use the S3 service's default KMS key. The chart values and the `kmsKeyId` field
+  description in the CRD now say `KMS`.
+
 ## [0.11.0]
 
 ### Fixed
