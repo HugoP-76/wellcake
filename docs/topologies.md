@@ -88,6 +88,8 @@ primary and elect a new one on failure.
 - Sentinel StatefulSet: `spec.sentinel.replicas` (minimum 3, odd
   recommended).
 - Sentinel quorum: `spec.sentinel.quorum` or `replicas/2 + 1`.
+- Sentinel container resources: `spec.sentinel.resources`. `spec.resources`
+  only applies to the Valkey container.
 - Sentinel timings: `spec.sentinel.downAfterMilliseconds` (default 5000) and
   `spec.sentinel.failoverTimeout` (default 60000). A change is pushed to the
   running Sentinels with `SENTINEL SET`, without restarting them.

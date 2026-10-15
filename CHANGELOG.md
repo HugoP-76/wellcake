@@ -8,6 +8,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `spec.sentinel.resources` and `spec.metrics.resources` on `ValkeyCluster`
+  (v1beta1 and v1alpha1) set the requests and limits of the Sentinel container
+  and of the metrics exporter sidecar. `spec.resources` only applies to the
+  Valkey container, so these two containers had none, or a namespace
+  LimitRange's defaults. Left unset, nothing changes and no pod restarts. The
+  `valkey-cluster` chart exposes them as `sentinel.resources` and
+  `metrics.resources`.
 - `spec.sentinel.downAfterMilliseconds` and `spec.sentinel.failoverTimeout` on
   `ValkeyCluster` (v1beta1 and v1alpha1) to tune Sentinel failure detection and
   failover, which were hard-coded to 5000 and 60000 ms. A change is pushed to
