@@ -7,6 +7,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -136,7 +137,16 @@ func (r *ValkeyClusterReconciler) reconcileSentinel(ctx context.Context, vc *cac
 	}
 	// Sentinel topology has no periodic requeue, so retry until every Sentinel
 	// runs the configured timings.
-	timingsPending := r.applySentinelTimings(ctx, vc, password)
+	sentinelPending := r.applySentinelTimings(ctx, vc, password)
+	// Drop dead Sentinel peers and replica entries, one Sentinel at a time.
+	views := r.collectSentinelViews(ctx, vc, password)
+	if r.resetStaleSentinels(ctx, vc, password, views) {
+		sentinelPending = true
+	}
+	// Put back a data pod that replicates from the wrong pod, one per reconcile.
+	if r.repairSentinelDataPods(ctx, vc, password, views) {
+		sentinelPending = true
+	}
 
 	if err := r.ensureBackupCronJob(ctx, vc); err != nil {
 		return ctrl.Result{}, fmt.Errorf("backup cronjob: %w", err)
@@ -191,8 +201,10 @@ func (r *ValkeyClusterReconciler) reconcileSentinel(ctx context.Context, vc *cac
 		ObservedGeneration: vc.Generation,
 		LastTransitionTime: metav1.Now(),
 	})
-	var res ctrl.Result
-	if timingsPending {
+	// Sentinel drift (dead entries, a replica chained out of view) raises no
+	// watch event, so a healthy cluster is still rechecked every minute.
+	res := ctrl.Result{RequeueAfter: time.Minute}
+	if sentinelPending {
 		res.RequeueAfter = 30 * time.Second
 	}
 	return res, r.Status().Patch(ctx, vc, patch)
@@ -711,4 +723,233 @@ func buildSentinelPDB(vc *cachev1beta1.ValkeyCluster) *policyv1.PodDisruptionBud
 			MaxUnavailable: &maxU,
 		},
 	}
+}
+
+// sentinelView is what one Sentinel reports about the monitored master.
+type sentinelView struct {
+	ordinal        int32
+	master         string // ip:port
+	flags          string
+	otherSentinels int
+	staleReplicas  int // s_down replica entries known by IP
+}
+
+// pickSentinelToReset decides which Sentinel, if any, gets SENTINEL RESET. A
+// Sentinel that came back with a new ID (an older operator, or a lost volume)
+// leaves the others counting a dead peer, which raises the majority a failover
+// needs; replica entries recorded by IP before the data pods announced their
+// name stay as dead entries. RESET drops both and the Sentinel rediscovers the
+// live ones within seconds. It is only safe one Sentinel at a time, with every
+// Sentinel up and agreeing on a healthy master, and only after the last reset
+// one has found its peers again. It returns -1 when nothing is to be done.
+func pickSentinelToReset(views []sentinelView, replicas int32) int32 {
+	if len(views) == 0 || int32(len(views)) != replicas {
+		return -1
+	}
+	for _, v := range views {
+		if v.master != views[0].master || v.flags != roleMaster || v.otherSentinels < int(replicas)-1 {
+			return -1
+		}
+	}
+	for _, v := range views {
+		if v.otherSentinels > int(replicas)-1 || v.staleReplicas > 0 {
+			return v.ordinal
+		}
+	}
+	return -1
+}
+
+// resetStaleSentinels collects every Ready Sentinel's view and runs SENTINEL
+// RESET on the one pickSentinelToReset names. It returns true while some
+// Sentinel still has dead entries, so the caller requeues and the next
+// Sentinel is handled once this one has found its peers again.
+func (r *ValkeyClusterReconciler) resetStaleSentinels(ctx context.Context, vc *cachev1beta1.ValkeyCluster, password string, views []sentinelView) bool {
+	log := logf.FromContext(ctx)
+	dirty := false
+	for _, v := range views {
+		if v.otherSentinels > int(vc.Spec.Sentinel.Replicas)-1 || v.staleReplicas > 0 {
+			dirty = true
+		}
+	}
+	ord := pickSentinelToReset(views, vc.Spec.Sentinel.Replicas)
+	if ord < 0 {
+		return dirty
+	}
+	host := sentinelPodFQDN(vc, ord)
+	c := dialReplClient(ctx, host, sentinelListenPort(vc), password, tlsEnabled(vc), loadMTLSClientCert(ctx, r, vc), 3*time.Second)
+	if c == nil {
+		return true
+	}
+	defer c.close()
+	if err := c.rdb.Do(ctx, "SENTINEL", "RESET", sentinelMasterName).Err(); err != nil {
+		log.Error(err, "Could not reset Sentinel", "pod", host)
+		return true
+	}
+	log.Info("Reset Sentinel with dead entries", "pod", host)
+	return true
+}
+
+// collectSentinelViews reads every Ready Sentinel's view of the master. A
+// Sentinel that is down or does not answer is left out, which the callers
+// read as "not every Sentinel agrees" and then do nothing.
+func (r *ValkeyClusterReconciler) collectSentinelViews(ctx context.Context, vc *cachev1beta1.ValkeyCluster, password string) []sentinelView {
+	pods, err := r.listSentinelRolloutPods(ctx, vc)
+	if err != nil {
+		return nil
+	}
+	port := sentinelListenPort(vc)
+	cert := loadMTLSClientCert(ctx, r, vc)
+	var views []sentinelView
+	for _, p := range pods {
+		if !p.ready {
+			continue
+		}
+		c := dialReplClient(ctx, sentinelPodFQDN(vc, p.ordinal), port, password, tlsEnabled(vc), cert, 3*time.Second)
+		if c == nil {
+			continue
+		}
+		v, err := c.sentinelView(ctx, sentinelMasterName)
+		c.close()
+		if err != nil {
+			continue
+		}
+		v.ordinal = p.ordinal
+		views = append(views, v)
+	}
+	return views
+}
+
+// agreedMaster returns the master every Sentinel reports, when all of them are
+// up, agree, and see it healthy with no failover in progress.
+func agreedMaster(views []sentinelView, replicas int32) (string, bool) {
+	if len(views) == 0 || int32(len(views)) != replicas {
+		return "", false
+	}
+	for _, v := range views {
+		if v.master != views[0].master || v.flags != roleMaster {
+			return "", false
+		}
+	}
+	return views[0].master, true
+}
+
+// repairSentinelDataPods points a data pod that does not replicate from the
+// Sentinels' master back at it. Sentinel only reconfigures replicas it knows,
+// and it learns them from the master's INFO: a pod that restarted and joined
+// another replica during a rollout (a chain), or one that came back as a
+// primary under an address Sentinel never saw, stays that way. With every
+// Sentinel agreeing on a healthy master and every data pod Ready, the operator
+// sends REPLICAOF (by the master pod's DNS name) and CONFIG REWRITE to one such
+// pod per reconcile. It returns true when it changed one, so the caller
+// requeues for the next.
+func (r *ValkeyClusterReconciler) repairSentinelDataPods(ctx context.Context, vc *cachev1beta1.ValkeyCluster, password string, views []sentinelView) bool {
+	master, ok := agreedMaster(views, vc.Spec.Sentinel.Replicas)
+	if !ok {
+		return false
+	}
+	pods, err := r.listRolloutPods(ctx, vc)
+	if err != nil || int32(len(pods)) != vc.Spec.Replicas {
+		return false
+	}
+	for _, p := range pods {
+		if !p.ready {
+			return false
+		}
+	}
+	var podList corev1.PodList
+	if err := r.List(ctx, &podList, client.InNamespace(vc.Namespace), client.MatchingLabels(labelsFor(vc))); err != nil {
+		return false
+	}
+	sts := statefulSetName(vc)
+	byIP := map[string]int32{}
+	for i := range podList.Items {
+		if ord, ok := ordinalFromPodName(podList.Items[i].Name, sts); ok && podList.Items[i].Status.PodIP != "" {
+			byIP[podList.Items[i].Status.PodIP] = ord
+		}
+	}
+	ordinalOf := func(host string) (int32, bool) {
+		if ord, ok := byIP[host]; ok {
+			return ord, true
+		}
+		return ordinalFromPodName(podNameFromFQDN(host), sts)
+	}
+	host, _, _ := strings.Cut(master, ":")
+	masterOrd, ok := ordinalOf(host)
+	if !ok {
+		return false
+	}
+	survey := r.surveyReplication(ctx, vc, password)
+	if int(masterOrd) >= len(survey) || !survey[masterOrd].reachable || survey[masterOrd].role != roleMaster {
+		return false
+	}
+	port := valkeyPort
+	if tlsEnabled(vc) {
+		port = valkeyTLSPort
+	}
+	target := podFQDN(vc, podName(vc, masterOrd))
+	if i := misplacedDataPod(survey, masterOrd, ordinalOf); i >= 0 {
+		s := survey[i]
+		log := logf.FromContext(ctx)
+		c := dialReplClient(ctx, s.host, port, password, tlsEnabled(vc), loadMTLSClientCert(ctx, r, vc), 3*time.Second)
+		if c == nil {
+			return false
+		}
+		err := c.replicaOf(ctx, target, port)
+		if err == nil {
+			err = c.rdb.Do(ctx, "CONFIG", "REWRITE").Err()
+		}
+		c.close()
+		if err != nil {
+			log.Error(err, "Could not point data pod at the Sentinels' master", "pod", s.host, "master", target)
+			return true
+		}
+		log.Info("Pointed data pod at the Sentinels' master", "pod", s.host, "role", s.role, "was", s.masterHost, "master", target)
+		return true
+	}
+	return false
+}
+
+// misplacedDataPod returns the index in survey of the first reachable data pod
+// that is neither the master nor a replica of it, or -1.
+func misplacedDataPod(survey []podRole, masterOrd int32, ordinalOf func(string) (int32, bool)) int {
+	for i, s := range survey {
+		if !s.reachable || s.ordinal == masterOrd {
+			continue
+		}
+		if s.role == roleSlave {
+			if ord, ok := ordinalOf(s.masterHost); ok && ord == masterOrd {
+				continue
+			}
+		}
+		return i
+	}
+	return -1
+}
+
+// sentinelView reads SENTINEL MASTER and SENTINEL REPLICAS for one master.
+func (c *replClient) sentinelView(ctx context.Context, name string) (sentinelView, error) {
+	m, err := c.sentinelMaster(ctx, name)
+	if err != nil {
+		return sentinelView{}, err
+	}
+	others, _ := strconv.Atoi(m["num-other-sentinels"])
+	v := sentinelView{master: m["ip"] + ":" + m["port"], flags: m["flags"], otherSentinels: others}
+	res, err := c.rdb.Do(ctx, "SENTINEL", "REPLICAS", name).Result()
+	if err != nil {
+		return sentinelView{}, err
+	}
+	list, ok := res.([]any)
+	if !ok {
+		return sentinelView{}, fmt.Errorf("unexpected SENTINEL REPLICAS reply type %T", res)
+	}
+	for _, e := range list {
+		rep, err := parseSentinelMaster(e)
+		if err != nil {
+			return sentinelView{}, err
+		}
+		if strings.Contains(rep["flags"], "s_down") && net.ParseIP(rep["ip"]) != nil {
+			v.staleReplicas++
+		}
+	}
+	return v, nil
 }

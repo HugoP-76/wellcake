@@ -14,6 +14,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Go 1.26 `new(value)` form instead of `ptr.To(value)` where the linter asks
   for it.
 
+### Fixed
+
+- In the Sentinel topology the operator now cleans up dead Sentinel entries
+  (#62). A Sentinel that came back with a new ID (an older operator, or a lost
+  volume) left the others counting a dead peer, which raises the majority a
+  failover needs, and replica entries recorded by IP before the data pods
+  announced their name stayed as `s_down`. When every Sentinel is up, they agree
+  on a healthy master and none of them is still finding its peers, the operator
+  runs `SENTINEL RESET` on one Sentinel that has such entries, then waits for it
+  to find its peers again before the next one. The manual reset from the 0.12.0
+  upgrade notes is no longer needed.
+- In the Sentinel topology the operator now repairs a data pod that replicates
+  from something other than the Sentinels' master, for example a replica
+  chained behind another replica. Sentinel never sees such a pod, so it would
+  never fail over to it. Once every data pod is ready and the Sentinels agree on
+  a master that answers as one, the operator points the stray pod at that
+  master and runs `CONFIG REWRITE`, one pod per pass. A healthy Sentinel cluster
+  is now rechecked every minute, since this drift raises no watch event.
+
 ## [0.12.0]
 
 ### Added
