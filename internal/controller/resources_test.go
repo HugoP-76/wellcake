@@ -49,6 +49,36 @@ func minimalCR() *cachev1beta1.ValkeyCluster {
 	}
 }
 
+func TestTLSValkeyProbesPingOverTLS(t *testing.T) {
+	vc := minimalCR()
+	vc.Spec.TLS = &cachev1beta1.TLSSpec{Enabled: true}
+	vc.Spec.Auth = &cachev1beta1.AuthSpec{Enabled: new(true)}
+
+	container := buildStatefulSet(vc, "", false).Spec.Template.Spec.Containers[0]
+	for name, probe := range map[string]*corev1.Probe{
+		"readiness": container.ReadinessProbe,
+		"liveness":  container.LivenessProbe,
+	} {
+		if probe == nil || probe.Exec == nil {
+			t.Errorf("%s probe = %+v, want an exec probe", name, probe)
+			continue
+		}
+		command := strings.Join(probe.Exec.Command, " ")
+		// The TLS port, not valkey-cli's default 6379 (closed with TLS on), and
+		// no certificate verification, so an expired cert does not fail liveness.
+		for _, want := range []string{"valkey-cli -p 6380 --tls --insecure", "--cert " + tlsMountPath + "/tls.crt", "PING"} {
+			if !strings.Contains(command, want) {
+				t.Errorf("%s probe command %q missing %q", name, command, want)
+			}
+		}
+	}
+	for _, env := range container.Env {
+		if env.Name == "REDISCLI_AUTH" {
+			t.Errorf("probe needs no password, got %s in the container env", env.Name)
+		}
+	}
+}
+
 func TestApplyDefaults(t *testing.T) {
 	tests := []struct {
 		name          string

@@ -1241,8 +1241,8 @@ func buildStatefulSet(vc *cachev1beta1.ValkeyCluster, configHash string, proacti
 			{Name: configVolumeName, MountPath: configMountPath, ReadOnly: true},
 			{Name: dataVolumeName, MountPath: dataMountPath},
 		},
-		ReadinessProbe: tcpProbe(port, 5, 5),
-		LivenessProbe:  tcpProbe(port, 15, 20),
+		ReadinessProbe: valkeyProbe(vc, port, 5, 5),
+		LivenessProbe:  valkeyProbe(vc, port, 15, 20),
 	}
 	if tlsEnabled(vc) {
 		valkeyContainer.VolumeMounts = append(valkeyContainer.VolumeMounts, corev1.VolumeMount{
@@ -1680,11 +1680,26 @@ func defaultAntiAffinity(vc *cachev1beta1.ValkeyCluster) *corev1.Affinity {
 	}
 }
 
-func tcpProbe(port int32, initial, period int32) *corev1.Probe {
+func valkeyProbe(vc *cachev1beta1.ValkeyCluster, port, initial, period int32) *corev1.Probe {
+	handler := corev1.ProbeHandler{
+		TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)},
+	}
+	// A TCP probe on a TLS port makes Valkey log a failed handshake on every
+	// check. PING over TLS instead. --insecure keeps the probe about the server
+	// being up: an expired certificate must not restart every pod at once.
+	// valkey-cli exits 0 on an error reply (NOAUTH, LOADING), so no password is
+	// needed. The cert and key answer a mutual-TLS client certificate request.
+	if tlsEnabled(vc) {
+		handler = corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{
+			"valkey-cli", "-p", strconv.Itoa(int(port)),
+			"--tls", "--insecure",
+			"--cert", tlsMountPath + "/" + secretKeyTLSCert,
+			"--key", tlsMountPath + "/" + secretKeyTLSKey,
+			"PING",
+		}}}
+	}
 	return &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)},
-		},
+		ProbeHandler:        handler,
 		InitialDelaySeconds: initial,
 		PeriodSeconds:       period,
 		TimeoutSeconds:      3,

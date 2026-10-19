@@ -6,6 +6,7 @@ package controller
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -237,7 +238,15 @@ func TestSentinelServesOnTLSPort(t *testing.T) {
 			return 0
 		}
 		for name, p := range map[string]*corev1.Probe{"readiness": c.ReadinessProbe, "liveness": c.LivenessProbe} {
-			if p == nil || p.TCPSocket == nil || resolve(p.TCPSocket.Port) != want {
+			if p == nil {
+				t.Errorf("tls=%v: %s probe is missing", tlsOn, name)
+				continue
+			}
+			if tlsOn {
+				if p.Exec == nil || !strings.Contains(strings.Join(p.Exec.Command, " "), "valkey-cli -p "+strconv.Itoa(int(want))+" --tls --insecure") {
+					t.Errorf("tls=%v: %s probe must PING over TLS on %d, got %+v", tlsOn, name, want, p)
+				}
+			} else if p.TCPSocket == nil || resolve(p.TCPSocket.Port) != want {
 				t.Errorf("tls=%v: %s probe must dial %d, got %+v", tlsOn, name, want, p)
 			}
 		}
