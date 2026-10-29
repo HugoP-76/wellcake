@@ -8,6 +8,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `spec.networkPolicy.egress` on `ValkeyCluster` (v1beta1 and v1alpha1) adds
+  egress rules to the generated NetworkPolicy (#74), for namespaces with a
+  default-deny egress policy. With `enabled: true`, the pods may reach DNS
+  (`egress.dns`, by default the kube-dns pods in `kube-system` on UDP and TCP
+  53) and each other on the ports the ingress side opens between them (the
+  data or TLS port, the cluster bus, the Sentinel port), and nothing else
+  unless listed in `egress.extra`, appended as is. It is opt-in: the backup
+  upload, `restoreFrom` and `replicateFrom` need `extra` rules. The
+  valkey-cluster chart exposes it as `networkPolicy.egress`.
 - The valkey-cluster chart sets annotations on the `ValkeyCluster` resource
   (`annotations`), so the operator's annotations can come from the chart
   values: `valkey.wellcake.io/proactive-rollout`, the request annotations
