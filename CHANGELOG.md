@@ -6,6 +6,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The valkey-cluster chart sets annotations on the `ValkeyCluster` resource
+  (`annotations`), so the operator's annotations can come from the chart
+  values: `valkey.wellcake.io/proactive-rollout`, the request annotations
+  (`restart`, `rotate-password`, `failover`, `reshard`), each acted on once per
+  new value, and `valkey.wellcake.io/accept-replication-durability-risk`,
+  without which the webhook rejects a new cluster with `profile: Durable` on
+  the Replication topology.
+
 ### Fixed
 
 - In the Sentinel topology the Sentinel pods ignored `spec.nodeSelector`,
