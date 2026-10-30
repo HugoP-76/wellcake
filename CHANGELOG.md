@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- In the Sentinel topology, the Sentinel StatefulSet now follows the
+  `valkey.wellcake.io/proactive-rollout` annotation when it is set or removed
+  on an existing cluster. Its update strategy was only applied when the
+  StatefulSet was created, so a cluster opted in afterwards kept the Sentinels
+  on `RollingUpdate`: a change of their pod template was rolled by both the
+  StatefulSet controller and the operator. The data StatefulSet already
+  followed the annotation.
+
 ## [0.13.0]
 
 ### Added
