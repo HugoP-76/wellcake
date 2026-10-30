@@ -19,6 +19,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   master; a client sees a few seconds of latency instead of lost writes. If
   the replicas do not catch up within 5s, the pause is lifted and the handover
   retried on the next pass.
+- In the Sentinel topology, the Sentinel StatefulSet now follows the
+  `valkey.wellcake.io/proactive-rollout` annotation when it is set or removed
+  on an existing cluster. Its update strategy was only applied when the
+  StatefulSet was created, so a cluster opted in afterwards kept the Sentinels
+  on `RollingUpdate`: a change of their pod template was rolled by both the
+  StatefulSet controller and the operator. The data StatefulSet already
+  followed the annotation.
 
 ## [0.13.0]
 
