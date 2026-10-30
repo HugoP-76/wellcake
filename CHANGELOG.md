@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The proactive rollout of the Sentinel topology no longer loses writes when it
+  hands the master over. It ran `SENTINEL FAILOVER` while the master kept
+  taking writes: the Sentinels promoted a replica that could lack the last
+  ones, and the old master took more until they demoted it, 10 to 14s later.
+  The operator now pauses the master's writes (`CLIENT PAUSE ... WRITE`, 15s at
+  most), waits for every replica to reach its offset, runs `SENTINEL FAILOVER`,
+  points the old master at the replica the Sentinels promoted, and lifts the
+  pause. The held writes fail with `READONLY` and the clients move to the new
+  master; a client sees a few seconds of latency instead of lost writes. If
+  the replicas do not catch up within 5s, the pause is lifted and the handover
+  retried on the next pass.
+
 ## [0.13.0]
 
 ### Added
